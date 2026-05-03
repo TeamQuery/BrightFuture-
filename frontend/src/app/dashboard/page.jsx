@@ -1,182 +1,245 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { getDashboard } from '@/lib/api';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Users, UserCheck, BookOpen, DollarSign, Library, Calendar, TrendingUp, AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
-import Link from 'next/link';
-import { format, parseISO } from 'date-fns';
 
-const COLORS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#db2777', '#0891b2'];
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Activity,
+  Database,
+  ShieldCheck,
+  ScrollText,
+  Server,
+  Users,
+} from 'lucide-react';
+import toast from 'react-hot-toast';
+import { useAuth } from '@/lib/auth-context';
+import RelativeTime from '@/components/RelativeTime';
+import { extractApiError, getAuditLogs, getSystemHealth, getUsers } from '@/lib/api';
 
-function StatCard({ title, value, sub, icon: Icon, className, href }) {
-  const content = (
-    <div className={`${className} rounded-2xl p-5 text-white card-hover cursor-pointer`}>
+function StatCard({ icon: Icon, label, value, accentClass, helper }) {
+  return (
+    <div className="card">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-white/70 text-xs font-medium uppercase tracking-wide">{title}</p>
-          <p className="text-3xl font-display font-bold mt-1">{value ?? '—'}</p>
-          {sub && <p className="text-white/60 text-xs mt-1">{sub}</p>}
+          <p className="text-xs font-medium uppercase tracking-wide text-gray-400">{label}</p>
+          <p className="text-2xl font-display font-bold text-gray-900 mt-2">{value}</p>
+          {helper ? <p className="text-xs text-gray-500 mt-2">{helper}</p> : null}
         </div>
-        <div className="bg-white/20 rounded-xl p-2.5"><Icon size={20} className="text-white" /></div>
+        <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${accentClass}`}>
+          <Icon size={20} className="text-white" />
+        </div>
       </div>
     </div>
   );
-  return href ? <Link href={href}>{content}</Link> : content;
+}
+
+function HealthCard({ title, check, icon: Icon }) {
+  const statusClass =
+    check?.status === 'ok'
+      ? 'bg-emerald-100 text-emerald-700'
+      : 'bg-amber-100 text-amber-700';
+
+  return (
+    <div className="card">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">{title}</p>
+          <p className="text-xs text-gray-500 mt-1">
+            {check?.latencyMs != null ? `${check.latencyMs} ms latency` : 'No latency available'}
+          </p>
+        </div>
+        <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center">
+          <Icon size={18} />
+        </div>
+      </div>
+      <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold mt-4 ${statusClass}`}>
+        <span className="w-2 h-2 rounded-full bg-current" />
+        {check?.status === 'ok' ? 'Healthy' : 'Degraded'}
+      </div>
+    </div>
+  );
 }
 
 export default function DashboardPage() {
-  const [data, setData] = useState(null);
+  const { user } = useAuth();
+  const [health, setHealth] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getDashboard().then(r => setData(r.data)).catch(console.error).finally(() => setLoading(false));
-  }, []);
+    if (!user) {
+      return;
+    }
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
-    </div>
-  );
+    let isMounted = true;
 
-  const stats = data?.stats || {};
-  const attendanceWeek = (data?.attendanceWeek || []).map(d => ({
-    date: format(parseISO(d.date), 'EEE'),
-    Present: parseInt(d.present),
-    Absent: parseInt(d.absent),
-  }));
+    async function load() {
+      setLoading(true);
 
-  const eventTypeColors = { exam:'bg-red-100 text-red-700', sports:'bg-green-100 text-green-700', cultural:'bg-purple-100 text-purple-700', holiday:'bg-blue-100 text-blue-700', meeting:'bg-orange-100 text-orange-700', academic:'bg-teal-100 text-teal-700', other:'bg-gray-100 text-gray-700' };
+      try {
+        const requests = [getSystemHealth()];
+
+        if (user.role === 'admin') {
+          requests.push(getUsers({ limit: 100 }), getAuditLogs({ limit: 8 }));
+        }
+
+        const [healthResponse, usersResponse, auditResponse] = await Promise.all(requests);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setHealth(healthResponse.data);
+        setUsers(usersResponse?.data?.users || []);
+        setAuditLogs(auditResponse?.data?.auditLogs || []);
+      } catch (error) {
+        if (isMounted) {
+          toast.error(extractApiError(error, 'Failed to load dashboard.'));
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  const roleSummary = useMemo(() => {
+    return users.reduce((summary, member) => {
+      summary[member.role] = (summary[member.role] || 0) + 1;
+      return summary;
+    }, {});
+  }, [users]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display font-bold text-2xl text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Academic Year 2024/2025 · Term 2</p>
+        <h1 className="font-display font-bold text-2xl text-gray-900">Workspace Dashboard</h1>
+        <p className="text-gray-500 text-sm mt-0.5">
+          The frontend is aligned with the hardened backend: auth, health, users, and audit tooling.
+        </p>
       </div>
 
-      {/* Stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard href="/students" title="Total Students" value={stats.students?.total} sub={`${stats.students?.active} active`} icon={Users} className="stat-blue" />
-        <StatCard href="/teachers" title="Teachers" value={stats.teachers?.total} sub="Active staff" icon={UserCheck} className="stat-purple" />
-        <StatCard href="/finance" title="Fees Collected" value={`GH₵ ${Number(stats.feeCollected?.total || 0).toLocaleString()}`} sub="2024/2025" icon={DollarSign} className="stat-green" />
-        <StatCard href="/library" title="Library Books" value={stats.books?.total} sub={`${stats.books?.available} available`} icon={Library} className="stat-orange" />
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <StatCard
+          icon={ShieldCheck}
+          label="Signed In As"
+          value={user?.role?.toUpperCase() || 'UNKNOWN'}
+          helper={user?.email}
+          accentClass="bg-blue-600"
+        />
+        <StatCard
+          icon={Activity}
+          label="API Status"
+          value={health?.status === 'ok' ? 'Healthy' : 'Degraded'}
+          helper={health?.timestamp ? <RelativeTime value={health.timestamp} prefix="Checked " /> : null}
+          accentClass="bg-emerald-600"
+        />
+        <StatCard
+          icon={Users}
+          label="Active Users"
+          value={user?.role === 'admin' ? users.length : 1}
+          helper={user?.role === 'admin' ? 'Visible via admin API' : 'Your current authenticated account'}
+          accentClass="bg-slate-800"
+        />
+        <StatCard
+          icon={ScrollText}
+          label="Recent Audits"
+          value={user?.role === 'admin' ? auditLogs.length : 'Restricted'}
+          helper={user?.role === 'admin' ? 'Latest audit trail entries' : 'Audit log visibility is admin-only'}
+          accentClass="bg-amber-500"
+        />
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard href="/attendance" title="Today Present" value={stats.attendanceToday?.present} sub={`of ${stats.attendanceToday?.total} total`} icon={CheckCircle2} className="stat-teal" />
-        <StatCard href="/attendance" title="Today Absent" value={stats.attendanceToday?.absent} sub="students absent" icon={AlertTriangle} className="stat-pink" />
-        <StatCard href="/classes" title="Classes" value={stats.classes?.total} sub="Active classes" icon={BookOpen} className="stat-blue" />
-        <StatCard href="/library" title="Overdue Books" value={stats.overdueBorrowings?.total} sub="Need return" icon={Clock} className="stat-orange" />
+      <div className="grid md:grid-cols-2 gap-4">
+        <HealthCard title="PostgreSQL" check={health?.checks?.database} icon={Database} />
+        <HealthCard title="Redis" check={health?.checks?.redis} icon={Server} />
       </div>
 
-      {/* Charts + Events */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Attendance chart */}
-        <div className="lg:col-span-2 card">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-semibold text-gray-800">Weekly Attendance</h3>
-              <p className="text-xs text-gray-400 mt-0.5">Last 7 school days</p>
+      {user?.role === 'admin' ? (
+        <div className="grid xl:grid-cols-5 gap-6">
+          <div className="xl:col-span-2 card">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">Role Distribution</h2>
+                <p className="text-xs text-gray-500 mt-1">Derived from `/api/users`</p>
+              </div>
+              <Users size={18} className="text-blue-600" />
             </div>
-            <TrendingUp size={18} className="text-blue-500" />
-          </div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={attendanceWeek}>
-              <defs>
-                <linearGradient id="present" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15}/>
-                  <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
-                </linearGradient>
-                <linearGradient id="absent" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.15}/>
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
-              <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#94a3b8' }} />
-              <Tooltip contentStyle={{ borderRadius: 10, border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.1)', fontSize: 12 }} />
-              <Area type="monotone" dataKey="Present" stroke="#2563eb" strokeWidth={2} fill="url(#present)" />
-              <Area type="monotone" dataKey="Absent" stroke="#ef4444" strokeWidth={2} fill="url(#absent)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
 
-        {/* Fee by category pie */}
-        <div className="card">
-          <h3 className="font-semibold text-gray-800 mb-1">Fee Collection</h3>
-          <p className="text-xs text-gray-400 mb-4">By category (GH₵)</p>
-          <ResponsiveContainer width="100%" height={160}>
-            <PieChart>
-              <Pie data={data?.feeByCategory || []} dataKey="total" nameKey="name" cx="50%" cy="50%" outerRadius={65} innerRadius={40}>
-                {(data?.feeByCategory || []).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Pie>
-              <Tooltip formatter={(v) => `GH₵ ${Number(v).toLocaleString()}`} contentStyle={{ borderRadius: 8, fontSize: 12 }} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="space-y-1 mt-2">
-            {(data?.feeByCategory || []).map((c, i) => (
-              <div key={c.name} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                  <span className="text-gray-600 truncate max-w-[100px]">{c.name}</span>
-                </div>
-                <span className="font-medium text-gray-800">GH₵{Number(c.total).toLocaleString()}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom row: events + recent students */}
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Upcoming events */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-800">Upcoming Events</h3>
-            <Link href="/events" className="text-xs text-blue-600 hover:underline">View all</Link>
-          </div>
-          <div className="space-y-3">
-            {(data?.upcomingEvents || []).length === 0 && <p className="text-sm text-gray-400">No upcoming events</p>}
-            {(data?.upcomingEvents || []).map(ev => (
-              <div key={ev.id} className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-                  <Calendar size={16} className="text-blue-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-gray-800 truncate">{ev.title}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${eventTypeColors[ev.event_type] || 'bg-gray-100 text-gray-700'}`}>{ev.event_type}</span>
+            <div className="space-y-3 mt-5">
+              {Object.entries(roleSummary).length === 0 ? (
+                <p className="text-sm text-gray-400">No users available.</p>
+              ) : (
+                Object.entries(roleSummary).map(([role, count]) => (
+                  <div key={role} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                    <span className="text-sm font-medium capitalize text-slate-700">{role}</span>
+                    <span className="text-sm font-bold text-slate-900">{count}</span>
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5">{format(parseISO(ev.event_date), 'MMM d, yyyy')}</p>
-                </div>
-              </div>
-            ))}
+                ))
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Recent students */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-800">Recent Students</h3>
-            <Link href="/students" className="text-xs text-blue-600 hover:underline">View all</Link>
-          </div>
-          <div className="space-y-3">
-            {(data?.recentStudents || []).map(s => (
-              <Link key={s.id} href={`/students/${s.id}`} className="flex items-center gap-3 hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded-lg transition-colors">
-                <img
-                  src={`https://ui-avatars.com/api/?name=${s.first_name}+${s.last_name}&background=${s.gender === 'Female' ? 'db2777' : '2563eb'}&color=fff&size=36`}
-                  className="w-9 h-9 rounded-full flex-shrink-0" alt=""
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800">{s.first_name} {s.last_name}</p>
-                  <p className="text-xs text-gray-400">{s.class_name} · {s.student_id}</p>
-                </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${s.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{s.status}</span>
-              </Link>
-            ))}
+          <div className="xl:col-span-3 card">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">Recent Audit Activity</h2>
+                <p className="text-xs text-gray-500 mt-1">Latest security-relevant backend events</p>
+              </div>
+              <ScrollText size={18} className="text-amber-600" />
+            </div>
+
+            <div className="space-y-3 mt-5">
+              {auditLogs.length === 0 ? (
+                <p className="text-sm text-gray-400">No audit events found yet.</p>
+              ) : (
+                auditLogs.map((entry) => (
+                  <div key={entry.id} className="rounded-2xl border border-slate-100 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{entry.action}</p>
+                        <p className="text-xs text-slate-500 mt-1">
+                          {entry.resourceType}
+                          {entry.resourceId ? ` • ${entry.resourceId}` : ''}
+                        </p>
+                      </div>
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${entry.status === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {entry.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                      <RelativeTime value={entry.createdAt} />
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="card">
+          <h2 className="font-semibold text-gray-900">What is available right now</h2>
+          <p className="text-sm text-gray-500 mt-2 max-w-2xl">
+            This frontend is now aligned with the production auth backend. Non-admin users can sign in,
+            maintain sessions with refresh rotation, and rely on backend health monitoring. Admin-only user
+            management is available in the Users & Audit area.
+          </p>
+        </div>
+      )}
     </div>
   );
 }

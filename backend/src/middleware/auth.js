@@ -1,28 +1,66 @@
-import jwt from 'jsonwebtoken';
-import { query } from '../db/index.js';
+import { findActiveUserById } from '../repositories/user-repository.js';
+import { asyncHandler } from '../lib/async-handler.js';
+import { ForbiddenError, UnauthorizedError } from '../lib/errors.js';
+import { extractBearerToken, verifyAccessToken } from '../lib/security.js';
+import { getSession, isAccessTokenRevoked } from '../services/auth-service.js';
 
-export const authenticate = async (req, res, next) => {
+export const authenticate = asyncHandler(async (req, _res, next) => {
+  const token = extractBearerToken(req.headers.authorization);
+
+  if (!token) {
+    throw new UnauthorizedError('A valid bearer access token is required.');
+  }
+
+  let payload;
+
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'No token provided' });
-    }
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const result = await query('SELECT id, name, email, role, is_active FROM users WHERE id = $1', [decoded.id]);
-    if (!result.rows.length || !result.rows[0].is_active) {
-      return res.status(401).json({ error: 'Invalid or inactive user' });
-    }
-    req.user = result.rows[0];
-    next();
-  } catch (err) {
-    return res.status(401).json({ error: 'Invalid token' });
+    payload = verifyAccessToken(token);
+  } catch (error) {
+    throw new UnauthorizedError('Access token is invalid or expired.');
   }
-};
 
-export const authorize = (...roles) => (req, res, next) => {
-  if (!roles.includes(req.user.role)) {
-    return res.status(403).json({ error: 'Access denied' });
+  if (payload.type !== 'access') {
+    throw new UnauthorizedError('Invalid access token type.');
   }
+
+  if (await isAccessTokenRevoked(payload.jti)) {
+    throw new UnauthorizedError('Access token has been revoked.');
+  }
+
+  const session = await getSession(payload.sid);
+
+  if (!session || session.userId !== payload.sub) {
+    throw new UnauthorizedError('The session associated with this access token is no longer active.');
+  }
+
+  const user = await findActiveUserById(payload.sub);
+
+  if (!user || !user.isActive || user.deletedAt) {
+    throw new UnauthorizedError('The account associated with this token is unavailable.');
+  }
+
+  req.user = user;
+  req.auth = {
+    sessionId: payload.sid,
+    tokenId: payload.jti,
+    expiresAtEpochSeconds: payload.exp,
+    subject: payload.sub,
+    role: payload.role,
+  };
+
   next();
-};
+});
+
+export function authorize(...roles) {
+  return function authorizationMiddleware(req, _res, next) {
+    if (!req.user) {
+      return next(new UnauthorizedError('Authentication is required.'));
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return next(new ForbiddenError());
+    }
+
+    return next();
+  };
+}

@@ -1,269 +1,136 @@
+import { closePostgresPool } from './index.js';
 import pool from './index.js';
+import { logger } from '../lib/logger.js';
 
-const createTables = async () => {
+async function migrate() {
   const client = await pool.connect();
+
   try {
     await client.query('BEGIN');
 
-    // Users / Auth
+    await client.query('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
+
+    await client.query(`
+      DO $$
+      BEGIN
+        CREATE TYPE user_role AS ENUM ('admin', 'teacher', 'parent', 'librarian', 'accountant');
+      EXCEPTION
+        WHEN duplicate_object THEN NULL;
+      END
+      $$;
+    `);
+
+    await client.query(`
+      CREATE OR REPLACE FUNCTION set_row_updated_at()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = NOW();
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        role VARCHAR(50) NOT NULL CHECK (role IN ('admin','teacher','parent','librarian','accountant')),
-        avatar VARCHAR(500),
-        phone VARCHAR(50),
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
+        name VARCHAR(120) NOT NULL,
+        email VARCHAR(320) NOT NULL,
+        password_hash TEXT NOT NULL,
+        role user_role NOT NULL DEFAULT 'parent',
+        is_active BOOLEAN NOT NULL DEFAULT true,
+        last_login_at TIMESTAMPTZ,
+        deleted_at TIMESTAMPTZ,
+        deleted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
 
-    // Classes / Grade levels
     await client.query(`
-      CREATE TABLE IF NOT EXISTS classes (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR(100) NOT NULL,
-        grade_level VARCHAR(50) NOT NULL,
-        section VARCHAR(10),
-        capacity INT DEFAULT 30,
-        room VARCHAR(50),
-        teacher_id UUID REFERENCES users(id) ON DELETE SET NULL,
-        academic_year VARCHAR(20) NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW()
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_trigger
+          WHERE tgname = 'users_set_updated_at'
+        ) THEN
+          CREATE TRIGGER users_set_updated_at
+          BEFORE UPDATE ON users
+          FOR EACH ROW
+          EXECUTE FUNCTION set_row_updated_at();
+        END IF;
+      END
+      $$;
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id BIGSERIAL PRIMARY KEY,
+        request_id UUID NOT NULL,
+        actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        target_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        action VARCHAR(100) NOT NULL,
+        resource_type VARCHAR(100) NOT NULL,
+        resource_id UUID,
+        status VARCHAR(20) NOT NULL DEFAULT 'success',
+        ip_address INET,
+        user_agent TEXT,
+        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
 
-    // Students
+    // Index strategy:
+    // 1. Partial unique index keeps active emails unique while supporting soft delete.
+    // 2. Role and login indexes support frequent auth/admin lookups.
+    // 3. Audit indexes favor recent chronological investigations by actor, target, and action.
     await client.query(`
-      CREATE TABLE IF NOT EXISTS students (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        student_id VARCHAR(50) UNIQUE NOT NULL,
-        first_name VARCHAR(100) NOT NULL,
-        last_name VARCHAR(100) NOT NULL,
-        date_of_birth DATE,
-        gender VARCHAR(20),
-        address TEXT,
-        photo VARCHAR(500),
-        class_id UUID REFERENCES classes(id) ON DELETE SET NULL,
-        enrollment_date DATE DEFAULT CURRENT_DATE,
-        status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active','inactive','graduated','transferred')),
-        blood_group VARCHAR(10),
-        medical_notes TEXT,
-        created_at TIMESTAMP DEFAULT NOW(),
-        updated_at TIMESTAMP DEFAULT NOW()
-      );
+      CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_active_idx
+      ON users (LOWER(email))
+      WHERE deleted_at IS NULL;
     `);
 
-    // Parents
     await client.query(`
-      CREATE TABLE IF NOT EXISTS parents (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-        first_name VARCHAR(100) NOT NULL,
-        last_name VARCHAR(100) NOT NULL,
-        email VARCHAR(255),
-        phone VARCHAR(50),
-        occupation VARCHAR(100),
-        address TEXT,
-        relationship VARCHAR(50),
-        created_at TIMESTAMP DEFAULT NOW()
-      );
+      CREATE INDEX IF NOT EXISTS users_role_active_idx
+      ON users (role)
+      WHERE deleted_at IS NULL;
     `);
 
-    // Student-Parent relationship
     await client.query(`
-      CREATE TABLE IF NOT EXISTS student_parents (
-        student_id UUID REFERENCES students(id) ON DELETE CASCADE,
-        parent_id UUID REFERENCES parents(id) ON DELETE CASCADE,
-        PRIMARY KEY (student_id, parent_id)
-      );
+      CREATE INDEX IF NOT EXISTS users_last_login_idx
+      ON users (last_login_at DESC);
     `);
 
-    // Subjects
     await client.query(`
-      CREATE TABLE IF NOT EXISTS subjects (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR(100) NOT NULL,
-        code VARCHAR(20) UNIQUE NOT NULL,
-        description TEXT,
-        grade_level VARCHAR(50),
-        credits INT DEFAULT 1,
-        created_at TIMESTAMP DEFAULT NOW()
-      );
+      CREATE INDEX IF NOT EXISTS audit_logs_actor_created_idx
+      ON audit_logs (actor_user_id, created_at DESC);
     `);
 
-    // Timetable
     await client.query(`
-      CREATE TABLE IF NOT EXISTS timetable (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        class_id UUID REFERENCES classes(id) ON DELETE CASCADE,
-        subject_id UUID REFERENCES subjects(id) ON DELETE CASCADE,
-        teacher_id UUID REFERENCES users(id) ON DELETE SET NULL,
-        day_of_week VARCHAR(20) NOT NULL,
-        start_time TIME NOT NULL,
-        end_time TIME NOT NULL,
-        room VARCHAR(50),
-        academic_year VARCHAR(20),
-        created_at TIMESTAMP DEFAULT NOW()
-      );
+      CREATE INDEX IF NOT EXISTS audit_logs_target_created_idx
+      ON audit_logs (target_user_id, created_at DESC);
     `);
 
-    // Attendance
     await client.query(`
-      CREATE TABLE IF NOT EXISTS attendance (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        student_id UUID REFERENCES students(id) ON DELETE CASCADE,
-        class_id UUID REFERENCES classes(id) ON DELETE CASCADE,
-        date DATE NOT NULL,
-        status VARCHAR(20) NOT NULL CHECK (status IN ('present','absent','late','excused')),
-        notes TEXT,
-        marked_by UUID REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(student_id, date)
-      );
+      CREATE INDEX IF NOT EXISTS audit_logs_action_created_idx
+      ON audit_logs (action, created_at DESC);
     `);
 
-    // Exams
     await client.query(`
-      CREATE TABLE IF NOT EXISTS exams (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR(200) NOT NULL,
-        subject_id UUID REFERENCES subjects(id) ON DELETE CASCADE,
-        class_id UUID REFERENCES classes(id) ON DELETE CASCADE,
-        exam_date DATE NOT NULL,
-        total_marks INT NOT NULL,
-        passing_marks INT,
-        exam_type VARCHAR(50) CHECK (exam_type IN ('quiz','midterm','final','assignment','project')),
-        academic_year VARCHAR(20),
-        term VARCHAR(20),
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-
-    // Grades / Results
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS grades (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        student_id UUID REFERENCES students(id) ON DELETE CASCADE,
-        exam_id UUID REFERENCES exams(id) ON DELETE CASCADE,
-        marks_obtained DECIMAL(5,2),
-        grade_letter VARCHAR(5),
-        remarks TEXT,
-        graded_by UUID REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT NOW(),
-        UNIQUE(student_id, exam_id)
-      );
-    `);
-
-    // Fee categories
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS fee_categories (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        name VARCHAR(100) NOT NULL,
-        description TEXT,
-        amount DECIMAL(10,2) NOT NULL,
-        frequency VARCHAR(50) CHECK (frequency IN ('one-time','monthly','termly','annual')),
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-
-    // Fee payments
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS fee_payments (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        student_id UUID REFERENCES students(id) ON DELETE CASCADE,
-        category_id UUID REFERENCES fee_categories(id),
-        amount_paid DECIMAL(10,2) NOT NULL,
-        payment_date DATE DEFAULT CURRENT_DATE,
-        payment_method VARCHAR(50) CHECK (payment_method IN ('cash','bank_transfer','mobile_money','card')),
-        reference_number VARCHAR(100),
-        academic_year VARCHAR(20),
-        term VARCHAR(20),
-        status VARCHAR(50) DEFAULT 'paid' CHECK (status IN ('paid','pending','partial','waived')),
-        notes TEXT,
-        received_by UUID REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-
-    // Library books
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS library_books (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        title VARCHAR(300) NOT NULL,
-        author VARCHAR(200),
-        isbn VARCHAR(50) UNIQUE,
-        category VARCHAR(100),
-        publisher VARCHAR(200),
-        publish_year INT,
-        total_copies INT DEFAULT 1,
-        available_copies INT DEFAULT 1,
-        location VARCHAR(100),
-        description TEXT,
-        cover_image VARCHAR(500),
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-
-    // Book borrowings
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS book_borrowings (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        book_id UUID REFERENCES library_books(id) ON DELETE CASCADE,
-        borrower_type VARCHAR(20) CHECK (borrower_type IN ('student','teacher')),
-        borrower_id UUID NOT NULL,
-        borrow_date DATE DEFAULT CURRENT_DATE,
-        due_date DATE NOT NULL,
-        return_date DATE,
-        status VARCHAR(20) DEFAULT 'borrowed' CHECK (status IN ('borrowed','returned','overdue')),
-        fine_amount DECIMAL(8,2) DEFAULT 0,
-        issued_by UUID REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-
-    // Events / Announcements
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS events (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        title VARCHAR(255) NOT NULL,
-        description TEXT,
-        event_date DATE NOT NULL,
-        end_date DATE,
-        event_type VARCHAR(50) CHECK (event_type IN ('academic','sports','cultural','holiday','exam','meeting','other')),
-        target_audience VARCHAR(50) DEFAULT 'all',
-        created_by UUID REFERENCES users(id),
-        created_at TIMESTAMP DEFAULT NOW()
-      );
-    `);
-
-    // Notifications
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS notifications (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        title VARCHAR(255) NOT NULL,
-        message TEXT NOT NULL,
-        type VARCHAR(50) DEFAULT 'info',
-        target_role VARCHAR(50),
-        target_user UUID REFERENCES users(id),
-        is_read BOOLEAN DEFAULT false,
-        created_at TIMESTAMP DEFAULT NOW()
-      );
+      CREATE INDEX IF NOT EXISTS audit_logs_request_id_idx
+      ON audit_logs (request_id);
     `);
 
     await client.query('COMMIT');
-    console.log('✅ All tables created successfully');
-  } catch (err) {
+    logger.info('Database migration completed successfully.');
+  } catch (error) {
     await client.query('ROLLBACK');
-    console.error('❌ Migration failed:', err);
-    throw err;
+    logger.error({ error }, 'Database migration failed.');
+    process.exitCode = 1;
   } finally {
     client.release();
-    process.exit(0);
+    await closePostgresPool();
   }
-};
+}
 
-createTables();
+migrate();

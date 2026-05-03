@@ -5,6 +5,7 @@ import { Plus, DollarSign, TrendingUp, Clock, CheckCircle } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
+import { formatCurrency } from '@/lib/formatters';
 
 const payMethods = ['cash','bank_transfer','mobile_money','card'];
 const emptyForm = { student_id:'', category_id:'', amount_paid:'', payment_method:'cash', reference_number:'', academic_year:'2024/2025', term:'Term 2', status:'paid', notes:'' };
@@ -64,12 +65,12 @@ export default function FinancePage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="card stat-green text-white rounded-2xl">
             <DollarSign size={20} className="mb-2 opacity-80" />
-            <div className="text-2xl font-bold">GH₵{Number(summary.total_collected||0).toLocaleString()}</div>
+            <div className="text-2xl font-bold">GH₵{formatCurrency(summary.total_collected || 0)}</div>
             <div className="text-white/70 text-xs mt-1">Total Collected</div>
           </div>
           <div className="card stat-orange text-white rounded-2xl">
             <Clock size={20} className="mb-2 opacity-80" />
-            <div className="text-2xl font-bold">GH₵{Number(summary.total_pending||0).toLocaleString()}</div>
+            <div className="text-2xl font-bold">GH₵{formatCurrency(summary.total_pending || 0)}</div>
             <div className="text-white/70 text-xs mt-1">Pending Amount</div>
           </div>
           <div className="card stat-blue text-white rounded-2xl">
@@ -125,7 +126,7 @@ export default function FinancePage() {
                   <tr key={p.id} className="hover:bg-gray-50">
                     <td className="table-cell font-medium text-sm">{p.first_name} {p.last_name}</td>
                     <td className="table-cell text-gray-500 text-xs">{p.category_name}</td>
-                    <td className="table-cell font-semibold text-sm">GH₵{Number(p.amount_paid).toLocaleString()}</td>
+                    <td className="table-cell font-semibold text-sm">GH₵{formatCurrency(p.amount_paid)}</td>
                     <td className="table-cell text-gray-400 text-xs capitalize">{p.payment_method?.replace('_',' ')}</td>
                     <td className="table-cell text-gray-400 text-xs">{p.payment_date ? format(parseISO(p.payment_date),'MMM d') : '—'}</td>
                     <td className="table-cell"><span className={statusBadge[p.status]||''}>{p.status}</span></td>

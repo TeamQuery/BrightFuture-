@@ -5,6 +5,7 @@ import { getStudent, getStudentGrades, getStudentAttendance, getStudentFees } fr
 import { ArrowLeft, User, BookOpen, ClipboardList, DollarSign, Heart, Phone, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { format, parseISO } from 'date-fns';
+import { formatCurrency } from '@/lib/formatters';
 
 const tabs = ['Profile', 'Grades', 'Attendance', 'Fees'];
 
@@ -207,7 +208,7 @@ export default function StudentDetailPage() {
           <div className="p-4 border-b border-gray-100 flex items-center justify-between">
             <h3 className="font-semibold text-gray-800">Fee Payments</h3>
             <div className="text-sm font-semibold text-green-600">
-              Total: GH₵ {fees.filter(f=>f.status==='paid').reduce((s,f)=>s+parseFloat(f.amount_paid||0),0).toLocaleString()}
+              Total: GH₵ {formatCurrency(fees.filter(f=>f.status==='paid').reduce((s,f)=>s+parseFloat(f.amount_paid||0),0))}
             </div>
           </div>
           <table className="w-full">
@@ -224,7 +225,7 @@ export default function StudentDetailPage() {
                 : fees.map(f => (
                 <tr key={f.id} className="hover:bg-gray-50">
                   <td className="table-cell font-medium">{f.category_name}</td>
-                  <td className="table-cell font-semibold text-gray-800">GH₵{Number(f.amount_paid).toLocaleString()}</td>
+                  <td className="table-cell font-semibold text-gray-800">GH₵{formatCurrency(f.amount_paid)}</td>
                   <td className="table-cell text-gray-500 capitalize text-xs">{f.payment_method?.replace('_',' ')}</td>
                   <td className="table-cell text-gray-400 text-xs">{f.payment_date ? format(parseISO(f.payment_date), 'MMM d, yyyy') : '—'}</td>
                   <td className="table-cell"><span className={feeBadge[f.status] || ''}>{f.status}</span></td>

@@ -1,51 +1,52 @@
-import express from 'express';
-import cors from 'cors';
-import morgan from 'morgan';
-import dotenv from 'dotenv';
+import app from './app.js';
+import { env } from './config/env.js';
+import { checkDatabaseHealth, closePostgresPool } from './db/index.js';
+import { closeRedisClient, getRedisClient } from './db/redis.js';
+import { logger } from './lib/logger.js';
 
-import authRoutes from './routes/auth.js';
-import studentsRoutes from './routes/students.js';
-import teachersRoutes from './routes/teachers.js';
-import academicRoutes from './routes/academic.js';
-import financeRoutes from './routes/finance.js';
-import libraryRoutes from './routes/library.js';
-import generalRoutes from './routes/general.js';
+let server;
 
-dotenv.config();
+async function shutdown(signal) {
+  logger.info({ signal }, 'Shutting down API process.');
 
-const app = express();
-const PORT = process.env.PORT || 5000;
+  if (!server) {
+    await Promise.allSettled([closePostgresPool(), closeRedisClient()]);
+    process.exit(0);
+  }
 
-// Middleware
-app.use(cors({ 
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000', 
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-app.use(express.json());
-app.use(morgan('dev'));
+  server.close(async (error) => {
+    if (error) {
+      logger.error({ error }, 'Failed to close HTTP server cleanly.');
+      process.exit(1);
+    }
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/students', studentsRoutes);
-app.use('/api/staff', teachersRoutes);
-app.use('/api/academic', academicRoutes);
-app.use('/api/finance', financeRoutes);
-app.use('/api/library', libraryRoutes);
-app.use('/api', generalRoutes);
+    await Promise.allSettled([closePostgresPool(), closeRedisClient()]);
+    process.exit(0);
+  });
+}
 
-// Health check
-app.get('/health', (req, res) => res.json({ status: 'OK', timestamp: new Date() }));
+async function bootstrap() {
+  await Promise.all([checkDatabaseHealth(), getRedisClient()]);
 
-// Error handler
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal server error' });
+  server = app.listen(env.PORT, () => {
+    logger.info({ port: env.PORT }, 'BrightFuture API listening.');
+  });
+
+  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+}
+
+process.on('unhandledRejection', (error) => {
+  logger.error({ error }, 'Unhandled promise rejection.');
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
+process.on('uncaughtException', (error) => {
+  logger.fatal({ error }, 'Uncaught exception.');
+  process.exit(1);
 });
 
-export default app;
+bootstrap().catch(async (error) => {
+  logger.fatal({ error }, 'Failed to start BrightFuture API.');
+  await Promise.allSettled([closePostgresPool(), closeRedisClient()]);
+  process.exit(1);
+});

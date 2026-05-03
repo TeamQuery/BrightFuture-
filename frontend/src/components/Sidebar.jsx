@@ -3,24 +3,14 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import {
-  LayoutDashboard, Users, UserCheck, BookOpen, CalendarDays,
-  ClipboardList, DollarSign, Library, Bell, GraduationCap,
-  Settings, LogOut, ChevronRight, Home, UserSquare2
+  LayoutDashboard, UserCheck, GraduationCap,
+  LogOut, ChevronRight
 } from 'lucide-react';
 import clsx from 'clsx';
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin','teacher','parent','librarian','accountant'] },
-  { href: '/students', label: 'Students', icon: Users, roles: ['admin','teacher'] },
-  { href: '/teachers', label: 'Staff', icon: UserCheck, roles: ['admin'] },
-  { href: '/classes', label: 'Classes', icon: Home, roles: ['admin','teacher'] },
-  { href: '/attendance', label: 'Attendance', icon: ClipboardList, roles: ['admin','teacher'] },
-  { href: '/grades', label: 'Grades & Exams', icon: BookOpen, roles: ['admin','teacher'] },
-  { href: '/timetable', label: 'Timetable', icon: CalendarDays, roles: ['admin','teacher'] },
-  { href: '/finance', label: 'Finance', icon: DollarSign, roles: ['admin','accountant'] },
-  { href: '/library', label: 'Library', icon: Library, roles: ['admin','librarian','teacher'] },
-  { href: '/parents', label: 'Parents', icon: UserSquare2, roles: ['admin','teacher'] },
-  { href: '/events', label: 'Events', icon: Bell, roles: ['admin','teacher','parent'] },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'teacher', 'parent', 'librarian', 'accountant'] },
+  { href: '/teachers', label: 'Users & Audit', icon: UserCheck, roles: ['admin'] },
 ];
 
 export default function Sidebar({ onClose }) {

@@ -1,0 +1,81 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: brightfuture-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/brightfuture
+      DATABASE_POOL_MAX: 20
+      DATABASE_POOL_MIN: 2
+      DATABASE_IDLE_TIMEOUT_MS: 10000
+      DATABASE_CONNECTION_TIMEOUT_MS: 5000
+      REDIS_URL: redis://redis:6379/0
+      REDIS_KEY_PREFIX: brightfuture
+      JWT_ACCESS_SECRET: replace-with-a-random-64-character-access-secret
+      JWT_REFRESH_SECRET: replace-with-a-random-64-character-refresh-secret
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 7d
+      COOKIE_NAME_REFRESH: refreshToken
+      COOKIE_SECURE: "true"
+      TRUST_PROXY: "true"
+      CORS_ORIGIN_WHITELIST: http://localhost:3000,http://localhost:3001
+      BCRYPT_COST: 12
+      LOG_LEVEL: info
+      ADMIN_BOOTSTRAP_NAME: BrightFuture Administrator
+      ADMIN_BOOTSTRAP_EMAIL: admin@brightfuture.edu.gh
+      ADMIN_BOOTSTRAP_PASSWORD: ChangeMeToAVeryStrongPassword123!
+    ports:
+      - "5000:5000"
+    command: >
+      sh -c "node src/db/migrate.js &&
+             node src/db/seed.js &&
+             node src/index.js"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:5000/health/ready || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: brightfuture-postgres
+    environment:
+      POSTGRES_DB: brightfuture
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d brightfuture"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: brightfuture-redis
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--loglevel", "warning"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
+  redis_data:

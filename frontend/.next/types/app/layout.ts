@@ -1,4 +1,4 @@
-// File: D:\GIGS\BrightFuture\BrightFuture\frontend\src\app\layout.jsx
+// File: C:\wamp64\www\BrightFuture-\frontend\src\app\layout.jsx
 import * as entry from '../../../src/app/layout.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

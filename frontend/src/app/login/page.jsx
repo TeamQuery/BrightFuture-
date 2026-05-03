@@ -1,17 +1,24 @@
 'use client';
-import { useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../lib/auth-context';
 import toast from 'react-hot-toast';
-import { BookOpen, Eye, EyeOff, GraduationCap } from 'lucide-react';
+import { Eye, EyeOff, GraduationCap, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('admin@brightfuture.edu.gh');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, user, loading: authLoading, getErrorMessage } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace('/dashboard');
+    }
+  }, [authLoading, router, user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -21,18 +28,11 @@ export default function LoginPage() {
       toast.success(`Welcome back, ${user.name.split(' ')[0]}!`);
       router.push('/dashboard');
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Login failed');
+      toast.error(getErrorMessage(err, 'Login failed.'));
     } finally {
       setLoading(false);
     }
   };
-
-  const quickLogins = [
-    { label: 'Admin', email: 'admin@brightfuture.edu.gh', color: 'bg-blue-100 text-blue-700' },
-    { label: 'Teacher', email: 'abena.mensah@brightfuture.edu.gh', color: 'bg-purple-100 text-purple-700' },
-    { label: 'Parent', email: 'grace.tetteh@brightfuture.edu.gh', color: 'bg-green-100 text-green-700' },
-    { label: 'Librarian', email: 'akua.sarpong@brightfuture.edu.gh', color: 'bg-orange-100 text-orange-700' },
-  ];
 
   return (
     <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg, #1e3a8a 0%, #7c3aed 50%, #0891b2 100%)' }}>
@@ -49,10 +49,10 @@ export default function LoginPage() {
             Empowering<br/>Education<br/>Through<br/>Technology
           </h1>
           <p className="text-white/70 text-lg leading-relaxed max-w-md">
-            A comprehensive school management system for Ghana's brightest future. Manage students, staff, attendance, grades, and more.
+            Secure access for BrightFuture staff and families. Sessions use short-lived access tokens with rotating refresh tokens for safer sign-in.
           </p>
           <div className="grid grid-cols-3 gap-4 mt-10">
-            {[['500+','Students'],['25+','Teachers'],['99%','Attendance']].map(([n,l]) => (
+            {[['JWT','Rotating'],['RBAC','Enforced'],['RFC7807','Errors']].map(([n,l]) => (
               <div key={l} className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
                 <div className="font-display font-bold text-2xl">{n}</div>
                 <div className="text-white/60 text-sm mt-1">{l}</div>
@@ -75,7 +75,7 @@ export default function LoginPage() {
             </div>
 
             <h2 className="font-display font-bold text-2xl text-gray-900 mb-1">Sign in</h2>
-            <p className="text-gray-500 text-sm mb-6">Access your school management dashboard</p>
+            <p className="text-gray-500 text-sm mb-6">Access the BrightFuture backend workspace</p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -106,18 +106,24 @@ export default function LoginPage() {
               </button>
             </form>
 
-            <div className="mt-6">
-              <p className="text-xs text-gray-400 text-center mb-3">Quick demo login</p>
-              <div className="grid grid-cols-2 gap-2">
-                {quickLogins.map(({ label, email: e, color }) => (
-                  <button key={label} type="button"
-                    onClick={() => { setEmail(e); setPassword('password123'); }}
-                    className={`${color} text-xs font-medium py-2 px-3 rounded-lg hover:opacity-80 transition-opacity`}>
-                    {label}
-                  </button>
-                ))}
+            <div className="mt-6 space-y-3">
+              <div className="flex items-start gap-3 rounded-2xl bg-slate-50 p-4 border border-slate-100">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center flex-shrink-0">
+                  <ShieldCheck size={18} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">New here?</p>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Parents can create their own account. Staff accounts should be provisioned by an administrator.
+                  </p>
+                </div>
               </div>
-              <p className="text-xs text-gray-400 text-center mt-2">All passwords: <code className="bg-gray-100 px-1 rounded">password123</code></p>
+              <Link
+                href="/register"
+                className="block w-full text-center py-3 rounded-xl font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors"
+              >
+                Create Parent Account
+              </Link>
             </div>
           </div>
         </div>

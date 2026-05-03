@@ -12,6 +12,7 @@ export default function DashboardLayout({ children }) {
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
+    if (!loading && user && user.role !== 'admin') router.push('/dashboard');
   }, [user, loading, router]);
 
   if (loading) return (
@@ -19,7 +20,7 @@ export default function DashboardLayout({ children }) {
       <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600" />
     </div>
   );
-  if (!user) return null;
+  if (!user || user.role !== 'admin') return null;
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50">

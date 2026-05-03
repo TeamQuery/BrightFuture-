@@ -1,134 +1,225 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { getStaff, createStaff, updateStaff } from '@/lib/api';
-import { UserPlus, Search, Mail, Phone, Edit2, UserCheck } from 'lucide-react';
+
+import { useEffect, useMemo, useState } from 'react';
+import {
+  AlertTriangle,
+  Mail,
+  ScrollText,
+  Shield,
+  Trash2,
+  UserCheck,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
+import RelativeTime from '@/components/RelativeTime';
+import { extractApiError, getAuditLogs, getUsers, softDeleteUser } from '@/lib/api';
 
-const roles = ['teacher','admin','librarian','accountant'];
-const emptyForm = { name:'', email:'', role:'teacher', phone:'' };
-
-const roleColors = { admin:'bg-purple-100 text-purple-700', teacher:'bg-blue-100 text-blue-700', librarian:'bg-orange-100 text-orange-700', accountant:'bg-green-100 text-green-700' };
-
-export default function TeachersPage() {
-  const [staff, setStaff] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function UsersPage() {
+  const [users, setUsers] = useState([]);
+  const [auditLogs, setAuditLogs] = useState([]);
   const [search, setSearch] = useState('');
-  const [showModal, setShowModal] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState(emptyForm);
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
 
-  const load = () => {
+  const load = async () => {
     setLoading(true);
-    getStaff({ search }).then(r => setStaff(r.data)).catch(() => toast.error('Failed to load staff')).finally(() => setLoading(false));
+
+    try {
+      const [usersResponse, auditsResponse] = await Promise.all([
+        getUsers({ limit: 100 }),
+        getAuditLogs({ limit: 25 }),
+      ]);
+
+      setUsers(usersResponse.data.users || []);
+      setAuditLogs(auditsResponse.data.auditLogs || []);
+    } catch (error) {
+      toast.error(extractApiError(error, 'Failed to load users.'));
+    } finally {
+      setLoading(false);
+    }
   };
 
-  useEffect(() => { load(); }, [search]);
+  useEffect(() => {
+    load();
+  }, []);
 
-  const openAdd = () => { setEditing(null); setForm(emptyForm); setShowModal(true); };
-  const openEdit = (s) => { setEditing(s); setForm({ name: s.name, email: s.email, role: s.role, phone: s.phone || '', is_active: s.is_active }); setShowModal(true); };
+  const filteredUsers = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
 
-  const handleSave = async (e) => {
-    e.preventDefault(); setSaving(true);
+    if (!normalizedSearch) {
+      return users;
+    }
+
+    return users.filter((user) =>
+      [user.name, user.email, user.role].some((value) =>
+        value?.toLowerCase().includes(normalizedSearch),
+      ),
+    );
+  }, [search, users]);
+
+  const handleDelete = async (user) => {
+    const confirmed = window.confirm(
+      `Soft-delete ${user.name}? Their account will be deactivated and all sessions revoked.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingId(user.id);
+
     try {
-      if (editing) { await updateStaff(editing.id, form); toast.success('Staff updated!'); }
-      else { await createStaff(form); toast.success('Staff added! Default password: password123'); }
-      setShowModal(false); load();
-    } catch (e) { toast.error(e.response?.data?.error || 'Failed to save'); }
-    finally { setSaving(false); }
+      await softDeleteUser(user.id);
+      toast.success(`${user.name} was soft-deleted.`);
+      await load();
+    } catch (error) {
+      toast.error(extractApiError(error, 'Failed to soft-delete user.'));
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="font-display font-bold text-2xl text-gray-900">Staff</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{staff.length} staff members</p>
+          <h1 className="font-display font-bold text-2xl text-gray-900">Users & Audit</h1>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Admin view backed by `/api/users` and `/api/users/audit-logs`
+          </p>
         </div>
-        <button onClick={openAdd} className="btn-primary"><UserPlus size={16} /> Add Staff</button>
+
+        <div className="relative w-full max-w-sm">
+          <input
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by name, email, or role"
+            className="input"
+          />
+        </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input type="search" placeholder="Search staff..." value={search} onChange={e => setSearch(e.target.value)} className="input pl-9" />
-      </div>
+      <div className="grid xl:grid-cols-5 gap-6">
+        <div className="xl:col-span-3 card p-0 overflow-hidden">
+          <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold text-gray-900">Users</h2>
+              <p className="text-xs text-gray-500 mt-1">{filteredUsers.length} visible accounts</p>
+            </div>
+            <UserCheck size={18} className="text-blue-600" />
+          </div>
 
-      <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {loading ? <div className="col-span-3 text-center py-12 text-gray-400">Loading...</div>
-          : staff.map(s => (
-          <div key={s.id} className="card card-hover">
-            <div className="flex items-start gap-4">
-              <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(s.name)}&background=2563eb&color=fff&size=56`}
-                className="w-14 h-14 rounded-2xl" alt="" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <h3 className="font-semibold text-gray-800 text-sm">{s.name}</h3>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium mt-1 inline-block capitalize ${roleColors[s.role] || 'bg-gray-100 text-gray-700'}`}>{s.role}</span>
+          <div className="divide-y divide-gray-100">
+            {loading ? (
+              <div className="px-6 py-10 text-sm text-gray-400">Loading users...</div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="px-6 py-10 text-sm text-gray-400">No users matched your search.</div>
+            ) : (
+              filteredUsers.map((user) => (
+                <div key={user.id} className="px-6 py-4 flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-slate-900">{user.name}</p>
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${user.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                        {user.isActive ? 'active' : 'inactive'}
+                      </span>
+                      <span className="text-xs px-2.5 py-1 rounded-full font-semibold bg-blue-100 text-blue-700 capitalize">
+                        {user.role}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
+                      <Mail size={12} />
+                      <span className="truncate">{user.email}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-2">
+                      Created <RelativeTime value={user.createdAt} />
+                      {user.lastLoginAt
+                        ? (
+                          <>
+                            {' '}• last login <RelativeTime value={user.lastLoginAt} />
+                          </>
+                        )
+                        : ' • no successful login recorded yet'}
+                    </p>
                   </div>
-                  <button onClick={() => openEdit(s)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"><Edit2 size={13} /></button>
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 space-y-2 border-t border-gray-50 pt-3">
-              <div className="flex items-center gap-2 text-xs text-gray-500"><Mail size={12} />{s.email}</div>
-              {s.phone && <div className="flex items-center gap-2 text-xs text-gray-500"><Phone size={12} />{s.phone}</div>}
-              {s.classes?.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {s.classes.map(c => <span key={c.name} className="text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{c.name}</span>)}
-                </div>
-              )}
-            </div>
-            <div className="mt-3 flex items-center gap-1.5">
-              <div className={`w-2 h-2 rounded-full ${s.is_active ? 'bg-green-400' : 'bg-gray-300'}`} />
-              <span className="text-xs text-gray-500">{s.is_active ? 'Active' : 'Inactive'}</span>
-            </div>
-          </div>
-        ))}
-      </div>
 
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="font-display font-bold text-lg">{editing ? 'Edit Staff' : 'Add Staff Member'}</h2>
-            </div>
-            <form onSubmit={handleSave} className="p-6 space-y-4">
-              <div>
-                <label className="label">Full Name *</label>
-                <input className="input" required value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
-              </div>
-              <div>
-                <label className="label">Email *</label>
-                <input type="email" className="input" required value={form.email} onChange={e => setForm({...form, email: e.target.value})} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Role *</label>
-                  <select className="input" value={form.role} onChange={e => setForm({...form, role: e.target.value})}>
-                    {roles.map(r => <option key={r} value={r} className="capitalize">{r.charAt(0).toUpperCase()+r.slice(1)}</option>)}
-                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(user)}
+                    disabled={deletingId === user.id}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 size={15} />
+                    {deletingId === user.id ? 'Removing...' : 'Soft delete'}
+                  </button>
                 </div>
-                <div>
-                  <label className="label">Phone</label>
-                  <input className="input" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} />
-                </div>
-              </div>
-              {editing && (
-                <div className="flex items-center gap-2">
-                  <input type="checkbox" id="active" checked={form.is_active} onChange={e => setForm({...form, is_active: e.target.checked})} />
-                  <label htmlFor="active" className="text-sm text-gray-700">Active</label>
-                </div>
-              )}
-              {!editing && <p className="text-xs text-gray-400">Default password: <code className="bg-gray-100 px-1 rounded">password123</code></p>}
-              <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => setShowModal(false)} className="btn-secondary flex-1">Cancel</button>
-                <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Saving...' : editing ? 'Save Changes' : 'Add Staff'}</button>
-              </div>
-            </form>
+              ))
+            )}
           </div>
         </div>
-      )}
+
+        <div className="xl:col-span-2 space-y-6">
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">Security Notes</h2>
+                <p className="text-xs text-gray-500 mt-1">Current backend guarantees</p>
+              </div>
+              <Shield size={18} className="text-blue-600" />
+            </div>
+            <div className="space-y-3 mt-5">
+              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                Access tokens are short-lived and refresh tokens rotate in Redis-backed sessions.
+              </div>
+              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                Soft delete revokes live sessions and keeps an audit trail instead of hard-deleting records.
+              </div>
+              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                Rate limits apply per IP and per authenticated user across the backend.
+              </div>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-semibold text-gray-900">Latest Audit Entries</h2>
+                <p className="text-xs text-gray-500 mt-1">Recent security-sensitive actions</p>
+              </div>
+              <ScrollText size={18} className="text-amber-600" />
+            </div>
+
+            <div className="space-y-3 mt-5">
+              {loading ? (
+                <p className="text-sm text-gray-400">Loading audit log...</p>
+              ) : auditLogs.length === 0 ? (
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <AlertTriangle size={16} />
+                  No audit events recorded yet.
+                </div>
+              ) : (
+                auditLogs.map((entry) => (
+                  <div key={entry.id} className="rounded-2xl border border-gray-100 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-slate-900">{entry.action}</p>
+                      <span className={`text-xs px-2 py-1 rounded-full font-semibold ${entry.status === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        {entry.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {entry.resourceType}
+                      {entry.resourceId ? ` • ${entry.resourceId}` : ''}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-2">
+                      <RelativeTime value={entry.createdAt} />
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

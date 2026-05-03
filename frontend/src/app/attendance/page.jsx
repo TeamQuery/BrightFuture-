@@ -1,9 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { getClasses, getStudents, getAttendance, markAttendance } from '@/lib/api';
-import { format } from 'date-fns';
 import { CheckCircle2, XCircle, Clock, AlertCircle, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getTodayIsoDate } from '@/lib/formatters';
 
 const statusOptions = [
   { value: 'present', label: 'Present', icon: CheckCircle2, color: 'text-green-600 bg-green-50 border-green-200' },
@@ -15,7 +15,8 @@ const statusOptions = [
 export default function AttendancePage() {
   const [classes, setClasses] = useState([]);
   const [selectedClass, setSelectedClass] = useState('');
-  const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [today, setToday] = useState('');
+  const [date, setDate] = useState('');
   const [students, setStudents] = useState([]);
   const [records, setRecords] = useState({});
   const [existingMap, setExistingMap] = useState({});
@@ -27,7 +28,14 @@ export default function AttendancePage() {
   }, []);
 
   useEffect(() => {
+    const currentDate = getTodayIsoDate();
+    setToday(currentDate);
+    setDate((existingDate) => existingDate || currentDate);
+  }, []);
+
+  useEffect(() => {
     if (!selectedClass) return;
+    if (!date) return;
     setLoading(true);
     Promise.all([
       getStudents({ class_id: selectedClass, limit: 100 }),
@@ -82,7 +90,7 @@ export default function AttendancePage() {
         </div>
         <div>
           <label className="label">Date</label>
-          <input type="date" className="input" value={date} max={format(new Date(),'yyyy-MM-dd')} onChange={e => setDate(e.target.value)} />
+          <input type="date" className="input" value={date} max={today || undefined} onChange={e => setDate(e.target.value)} />
         </div>
       </div>
 
