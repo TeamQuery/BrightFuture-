@@ -7,11 +7,6 @@ import toast from 'react-hot-toast';
 import { Eye, EyeOff, GraduationCap, UserPlus } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
-const demoPassword =
-  process.env.NEXT_PUBLIC_ACCOUNTS_PASSWORD ??
-  process.env.NEXT_PUBLIC_DEMO_ACCOUNT_PASSWORD ??
-  'password1234';
-
 const passwordRules = [
   {
     label: 'At least 12 characters',
@@ -53,11 +48,8 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const { register, user, loading, getErrorMessage } = useAuth();
   const router = useRouter();
-  const passwordIsDemo = form.password === demoPassword;
-  const unmetPasswordRules = passwordIsDemo
-    ? []
-    : passwordRules.filter((rule) => !rule.test(form.password));
-  const passwordIsValid = passwordIsDemo || unmetPasswordRules.length === 0;
+  const unmetPasswordRules = passwordRules.filter((rule) => !rule.test(form.password));
+  const passwordIsValid = unmetPasswordRules.length === 0;
 
   useEffect(() => {
     if (!loading && user) {
@@ -207,29 +199,20 @@ export default function RegisterPage() {
                 <UserPlus size={16} />
                 Password policy
               </div>
-              <p className="text-xs text-slate-500 mt-2">
-                {passwordIsDemo ? (
-                  <span className="block text-emerald-700">OK Configured demo password accepted</span>
-                ) : (
-                  passwordRules.map((rule) => {
-                    const isMet = rule.test(form.password);
+                  <div className="text-xs text-slate-500 mt-2">
+                    {passwordRules.map((rule) => {
+                      const isMet = rule.test(form.password);
 
-                    return (
-                      <span
-                        key={rule.label}
-                        className={`block ${isMet ? 'text-emerald-700' : 'text-slate-500'}`}
-                      >
-                        {isMet ? 'OK' : '-'} {rule.label}
-                      </span>
-                    );
-                  })
-                )}
-              </p>
-            </div>
-
-            <p className="text-sm text-gray-500 mt-6 text-center">
-              Already have an account?{' '}
-              <Link href="/login" className="font-semibold text-blue-600 hover:text-blue-700">
+                      return (
+                        <span
+                          key={rule.label}
+                          className={`block ${isMet ? 'text-emerald-700' : 'text-slate-500'}`}
+                        >
+                          {isMet ? 'OK' : '-'} {rule.label}
+                        </span>
+                      );
+                    })}
+                  </div>
                 Sign in
               </Link>
             </p>

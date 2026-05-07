@@ -1,4 +1,4 @@
-// File: C:\wamp64\www\BrightFuture-\frontend\src\app\login\page.jsx
+// File: D:\GIGS\BrightFuture\BrightFuture\frontend\src\app\login\page.jsx
 import * as entry from '../../../../src/app/login/page.js'
 import type { ResolvingMetadata, ResolvingViewport } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

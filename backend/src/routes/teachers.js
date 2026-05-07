@@ -37,10 +37,15 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', authorize('admin'), async (req, res) => {
   try {
-    const { name, email, role, phone, password = 'password123' } = req.body;
+    const { name, email, role, phone, password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required when creating staff accounts.' });
+    }
+
     const hashed = await bcrypt.hash(password, 10);
     const result = await query(`
-      INSERT INTO users (name, email, password, role, phone) VALUES ($1,$2,$3,$4,$5)
+      INSERT INTO users (name, email, password_hash, role, phone) VALUES ($1,$2,$3,$4,$5)
       RETURNING id,name,email,role,phone,is_active,created_at
     `, [name, email, hashed, role, phone]);
     res.status(201).json(result.rows[0]);

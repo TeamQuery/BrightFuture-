@@ -1,4 +1,9 @@
 {
+  "/_not-found/page": "app/_not-found/page.js",
   "/login/page": "app/login/page.js",
+  "/students/page": "app/students/page.js",
+  "/grades/page": "app/grades/page.js",
+  "/classes/page": "app/classes/page.js",
+  "/attendance/page": "app/attendance/page.js",
   "/dashboard/page": "app/dashboard/page.js"
 }
