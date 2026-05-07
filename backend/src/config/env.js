@@ -52,6 +52,8 @@ const envSchema = z.object({
   ADMIN_BOOTSTRAP_NAME: z.string().optional(),
   ADMIN_BOOTSTRAP_EMAIL: z.string().email().optional(),
   ADMIN_BOOTSTRAP_PASSWORD: z.string().optional(),
+  ACCOUNTS_PASSWORD: z.string().optional(),
+  DEMO_ACCOUNT_PASSWORD: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(sourceEnv);

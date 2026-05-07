@@ -2,17 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity,
-  Database,
-  ShieldCheck,
-  ScrollText,
-  Server,
-  Users,
+  Activity, Database, ShieldCheck, ScrollText, Server, Users,
+  BookOpen, DollarSign, Calendar, Award, Clock, GraduationCap
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/lib/auth-context';
 import RelativeTime from '@/components/RelativeTime';
-import { extractApiError, getAuditLogs, getSystemHealth, getUsers } from '@/lib/api';
+import {
+  extractApiError, getAuditLogs, getSystemHealth, getUsers,
+  getMyGrades, getMyAttendance, getTeacherClasses, getTeacherAttendanceSummary,
+  getLibraryStats, getFinanceStats, getClasses
+} from '@/lib/api';
 
 function StatCard({ icon: Icon, label, value, accentClass, helper }) {
   return (
@@ -63,6 +63,12 @@ export default function DashboardPage() {
   const [health, setHealth] = useState(null);
   const [users, setUsers] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
+  const [grades, setGrades] = useState([]);
+  const [attendance, setAttendance] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [attendanceSummary, setAttendanceSummary] = useState({});
+  const [libraryStats, setLibraryStats] = useState({});
+  const [financeStats, setFinanceStats] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -80,17 +86,38 @@ export default function DashboardPage() {
 
         if (user.role === 'admin') {
           requests.push(getUsers({ limit: 100 }), getAuditLogs({ limit: 8 }));
+        } else if (user.role === 'teacher') {
+          requests.push(getTeacherClasses(), getTeacherAttendanceSummary());
+        } else if (user.role === 'student' || user.role === 'parent') {
+          requests.push(getMyGrades(), getMyAttendance());
+        } else if (user.role === 'librarian') {
+          requests.push(getLibraryStats());
+        } else if (user.role === 'accountant') {
+          requests.push(getFinanceStats());
         }
 
-        const [healthResponse, usersResponse, auditResponse] = await Promise.all(requests);
+        const responses = await Promise.all(requests);
 
         if (!isMounted) {
           return;
         }
 
-        setHealth(healthResponse.data);
-        setUsers(usersResponse?.data?.users || []);
-        setAuditLogs(auditResponse?.data?.auditLogs || []);
+        setHealth(responses[0].data);
+
+        if (user.role === 'admin') {
+          setUsers(responses[1]?.data?.users || []);
+          setAuditLogs(responses[2]?.data?.auditLogs || []);
+        } else if (user.role === 'teacher') {
+          setClasses(responses[1]?.data || []);
+          setAttendanceSummary(responses[2]?.data || {});
+        } else if (user.role === 'student' || user.role === 'parent') {
+          setGrades(responses[1]?.data?.grades || []);
+          setAttendance(responses[2]?.data || []);
+        } else if (user.role === 'librarian') {
+          setLibraryStats(responses[1]?.data || {});
+        } else if (user.role === 'accountant') {
+          setFinanceStats(responses[1]?.data || {});
+        }
       } catch (error) {
         if (isMounted) {
           toast.error(extractApiError(error, 'Failed to load dashboard.'));
@@ -116,6 +143,18 @@ export default function DashboardPage() {
     }, {});
   }, [users]);
 
+  const averageGrade = useMemo(() => {
+    if (grades.length === 0) return 0;
+    const sum = grades.reduce((acc, g) => acc + parseFloat(g.grade || 0), 0);
+    return (sum / grades.length).toFixed(1);
+  }, [grades]);
+
+  const attendanceRate = useMemo(() => {
+    if (attendance.length === 0) return 0;
+    const present = attendance.filter(a => a.status === 'present').length;
+    return ((present / attendance.length) * 100).toFixed(1);
+  }, [attendance]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -127,117 +166,279 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display font-bold text-2xl text-gray-900">Workspace Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-0.5">
-          The frontend is aligned with the hardened backend: auth, health, users, and audit tooling.
-        </p>
+        <h1 className="font-display font-bold text-2xl text-gray-900">Dashboard</h1>
+        <p className="text-gray-600 mt-1">Welcome back, {user?.name}!</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard
-          icon={ShieldCheck}
-          label="Signed In As"
-          value={user?.role?.toUpperCase() || 'UNKNOWN'}
-          helper={user?.email}
-          accentClass="bg-blue-600"
-        />
-        <StatCard
-          icon={Activity}
-          label="API Status"
-          value={health?.status === 'ok' ? 'Healthy' : 'Degraded'}
-          helper={health?.timestamp ? <RelativeTime value={health.timestamp} prefix="Checked " /> : null}
-          accentClass="bg-emerald-600"
-        />
-        <StatCard
-          icon={Users}
-          label="Active Users"
-          value={user?.role === 'admin' ? users.length : 1}
-          helper={user?.role === 'admin' ? 'Visible via admin API' : 'Your current authenticated account'}
-          accentClass="bg-slate-800"
-        />
-        <StatCard
-          icon={ScrollText}
-          label="Recent Audits"
-          value={user?.role === 'admin' ? auditLogs.length : 'Restricted'}
-          helper={user?.role === 'admin' ? 'Latest audit trail entries' : 'Audit log visibility is admin-only'}
-          accentClass="bg-amber-500"
-        />
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4">
-        <HealthCard title="PostgreSQL" check={health?.checks?.database} icon={Database} />
-        <HealthCard title="Redis" check={health?.checks?.redis} icon={Server} />
-      </div>
-
-      {user?.role === 'admin' ? (
-        <div className="grid xl:grid-cols-5 gap-6">
-          <div className="xl:col-span-2 card">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="font-semibold text-gray-900">Role Distribution</h2>
-                <p className="text-xs text-gray-500 mt-1">Derived from `/api/users`</p>
-              </div>
-              <Users size={18} className="text-blue-600" />
-            </div>
-
-            <div className="space-y-3 mt-5">
-              {Object.entries(roleSummary).length === 0 ? (
-                <p className="text-sm text-gray-400">No users available.</p>
-              ) : (
-                Object.entries(roleSummary).map(([role, count]) => (
-                  <div key={role} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-                    <span className="text-sm font-medium capitalize text-slate-700">{role}</span>
-                    <span className="text-sm font-bold text-slate-900">{count}</span>
-                  </div>
-                ))
-              )}
-            </div>
+      {/* Admin Dashboard */}
+      {user?.role === 'admin' && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard
+              icon={ShieldCheck}
+              label="Signed In As"
+              value="ADMIN"
+              helper={user?.email}
+              accentClass="bg-blue-600"
+            />
+            <StatCard
+              icon={Activity}
+              label="API Status"
+              value={health?.status === 'ok' ? 'Healthy' : 'Degraded'}
+              helper={health?.timestamp ? <RelativeTime value={health.timestamp} prefix="Checked " /> : null}
+              accentClass="bg-emerald-600"
+            />
+            <StatCard
+              icon={Users}
+              label="Active Users"
+              value={users.length}
+              helper="Total registered users"
+              accentClass="bg-slate-800"
+            />
+            <StatCard
+              icon={ScrollText}
+              label="Recent Audits"
+              value={auditLogs.length}
+              helper="Latest audit trail entries"
+              accentClass="bg-amber-500"
+            />
           </div>
 
-          <div className="xl:col-span-3 card">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="font-semibold text-gray-900">Recent Audit Activity</h2>
-                <p className="text-xs text-gray-500 mt-1">Latest security-relevant backend events</p>
-              </div>
-              <ScrollText size={18} className="text-amber-600" />
-            </div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <HealthCard title="PostgreSQL" check={health?.checks?.database} icon={Database} />
+            <HealthCard title="Redis" check={health?.checks?.redis} icon={Server} />
+          </div>
 
-            <div className="space-y-3 mt-5">
-              {auditLogs.length === 0 ? (
-                <p className="text-sm text-gray-400">No audit events found yet.</p>
-              ) : (
-                auditLogs.map((entry) => (
-                  <div key={entry.id} className="rounded-2xl border border-slate-100 px-4 py-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">{entry.action}</p>
-                        <p className="text-xs text-slate-500 mt-1">
-                          {entry.resourceType}
-                          {entry.resourceId ? ` • ${entry.resourceId}` : ''}
-                        </p>
-                      </div>
-                      <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${entry.status === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                        {entry.status}
-                      </span>
+          <div className="grid xl:grid-cols-5 gap-6">
+            <div className="xl:col-span-2 card">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-gray-900">Role Distribution</h2>
+                  <p className="text-xs text-gray-500 mt-1">Derived from user data</p>
+                </div>
+                <Users size={18} className="text-blue-600" />
+              </div>
+
+              <div className="space-y-3 mt-5">
+                {Object.entries(roleSummary).length === 0 ? (
+                  <p className="text-sm text-gray-400">No users available.</p>
+                ) : (
+                  Object.entries(roleSummary).map(([role, count]) => (
+                    <div key={role} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                      <span className="text-sm font-medium capitalize text-slate-700">{role}</span>
+                      <span className="text-sm font-bold text-slate-900">{count}</span>
                     </div>
-                    <p className="text-xs text-slate-500 mt-2">
-                      <RelativeTime value={entry.createdAt} />
-                    </p>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="xl:col-span-3 card">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-semibold text-gray-900">Recent Audit Activity</h2>
+                  <p className="text-xs text-gray-500 mt-1">Latest security-relevant events</p>
+                </div>
+                <ScrollText size={18} className="text-amber-600" />
+              </div>
+
+              <div className="space-y-3 mt-5">
+                {auditLogs.length === 0 ? (
+                  <p className="text-sm text-gray-400">No audit events found yet.</p>
+                ) : (
+                  auditLogs.map((entry) => (
+                    <div key={entry.id} className="rounded-2xl border border-slate-100 px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">{entry.action}</p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {entry.resourceType}
+                            {entry.resourceId ? ` • ${entry.resourceId}` : ''}
+                          </p>
+                        </div>
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${entry.status === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                          {entry.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-2">
+                        <RelativeTime value={entry.createdAt} />
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
+        </>
+      )}
+
+      {/* Teacher Dashboard */}
+      {user?.role === 'teacher' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard
+            icon={GraduationCap}
+            label="My Classes"
+            value={classes.length}
+            helper="Classes I teach"
+            accentClass="bg-blue-600"
+          />
+          <StatCard
+            icon={Users}
+            label="Total Students"
+            value={classes.reduce((acc, c) => acc + (c.student_count || 0), 0)}
+            helper="Students in my classes"
+            accentClass="bg-emerald-600"
+          />
+          <StatCard
+            icon={Clock}
+            label="Attendance Rate"
+            value={`${attendanceSummary.average || 0}%`}
+            helper="Average attendance"
+            accentClass="bg-amber-500"
+          />
+          <StatCard
+            icon={Award}
+            label="Pending Grades"
+            value={attendanceSummary.pendingGrades || 0}
+            helper="Grades to submit"
+            accentClass="bg-purple-600"
+          />
         </div>
-      ) : (
-        <div className="card">
-          <h2 className="font-semibold text-gray-900">What is available right now</h2>
-          <p className="text-sm text-gray-500 mt-2 max-w-2xl">
-            This frontend is now aligned with the production auth backend. Non-admin users can sign in,
-            maintain sessions with refresh rotation, and rely on backend health monitoring. Admin-only user
-            management is available in the Users & Audit area.
-          </p>
+      )}
+
+      {/* Student Dashboard */}
+      {user?.role === 'student' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard
+            icon={Award}
+            label="Average Grade"
+            value={averageGrade}
+            helper="Current GPA"
+            accentClass="bg-blue-600"
+          />
+          <StatCard
+            icon={Clock}
+            label="Attendance Rate"
+            value={`${attendanceRate}%`}
+            helper="This term"
+            accentClass="bg-emerald-600"
+          />
+          <StatCard
+            icon={BookOpen}
+            label="Subjects"
+            value={grades.length}
+            helper="Enrolled subjects"
+            accentClass="bg-amber-500"
+          />
+          <StatCard
+            icon={Calendar}
+            label="Upcoming Events"
+            value="3"
+            helper="This week"
+            accentClass="bg-purple-600"
+          />
+        </div>
+      )}
+
+      {/* Parent Dashboard */}
+      {user?.role === 'parent' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard
+            icon={Users}
+            label="Children"
+            value="2"
+            helper="Enrolled students"
+            accentClass="bg-blue-600"
+          />
+          <StatCard
+            icon={Award}
+            label="Average Grade"
+            value={averageGrade}
+            helper="Children's grades"
+            accentClass="bg-emerald-600"
+          />
+          <StatCard
+            icon={Clock}
+            label="Attendance Rate"
+            value={`${attendanceRate}%`}
+            helper="Children's attendance"
+            accentClass="bg-amber-500"
+          />
+          <StatCard
+            icon={DollarSign}
+            label="Outstanding Fees"
+            value="$250"
+            helper="Pending payments"
+            accentClass="bg-red-500"
+          />
+        </div>
+      )}
+
+      {/* Librarian Dashboard */}
+      {user?.role === 'librarian' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard
+            icon={BookOpen}
+            label="Total Books"
+            value={libraryStats.totalBooks || 0}
+            helper="In library"
+            accentClass="bg-blue-600"
+          />
+          <StatCard
+            icon={Users}
+            label="Active Borrowings"
+            value={libraryStats.activeBorrowings || 0}
+            helper="Books checked out"
+            accentClass="bg-emerald-600"
+          />
+          <StatCard
+            icon={Clock}
+            label="Overdue Returns"
+            value={libraryStats.overdue || 0}
+            helper="Need attention"
+            accentClass="bg-red-500"
+          />
+          <StatCard
+            icon={Calendar}
+            label="This Month"
+            value={libraryStats.monthlyBorrowings || 0}
+            helper="Books borrowed"
+            accentClass="bg-amber-500"
+          />
+        </div>
+      )}
+
+      {/* Accountant Dashboard */}
+      {user?.role === 'accountant' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard
+            icon={DollarSign}
+            label="Total Revenue"
+            value={`$${financeStats.totalRevenue || 0}`}
+            helper="This month"
+            accentClass="bg-green-600"
+          />
+          <StatCard
+            icon={Users}
+            label="Pending Payments"
+            value={financeStats.pendingPayments || 0}
+            helper="Outstanding fees"
+            accentClass="bg-red-500"
+          />
+          <StatCard
+            icon={Award}
+            label="Paid This Month"
+            value={financeStats.paidThisMonth || 0}
+            helper="Completed payments"
+            accentClass="bg-blue-600"
+          />
+          <StatCard
+            icon={Calendar}
+            label="Due This Week"
+            value={financeStats.dueThisWeek || 0}
+            helper="Upcoming deadlines"
+            accentClass="bg-amber-500"
+          />
         </div>
       )}
     </div>

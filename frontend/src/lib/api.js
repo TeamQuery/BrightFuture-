@@ -44,15 +44,15 @@ export function setUnauthorizedHandler(handler) {
 export function extractApiError(error, fallbackMessage = 'Request failed') {
   const data = error?.response?.data;
 
-  if (data?.detail) {
-    return data.detail;
-  }
-
   if (data?.errors && typeof data.errors === 'object') {
     const fieldMessages = Object.values(data.errors).flat().filter(Boolean);
     if (fieldMessages.length) {
       return fieldMessages[0];
     }
+  }
+
+  if (data?.detail) {
+    return data.detail;
   }
 
   if (data?.title) {
@@ -215,7 +215,7 @@ export const markAttendance = (data) => api.post('/academic/attendance', data);
 export const getAttendanceSummary = (params) => api.get('/academic/attendance/summary', { params });
 export const getExams = (params) => api.get('/academic/exams', { params });
 export const createExam = (data) => api.post('/academic/exams', data);
-export const getGrades = (params) => api.get('/academic/grades', { params });
+export const getGrades = (params) => api.get('/grades', { params });
 export const submitGrades = (data) => api.post('/academic/grades', data);
 export const getFeeCategories = () => api.get('/finance/categories');
 export const createFeeCategory = (data) => api.post('/finance/categories', data);
@@ -230,3 +230,11 @@ export const borrowBook = (data) => api.post('/library/borrow', data);
 export const returnBook = (id) => api.put(`/library/return/${id}`);
 export const getParents = () => api.get('/parents');
 export const getParent = (id) => api.get(`/parents/${id}`);
+
+// Dashboard functions
+export const getMyGrades = () => api.get('/grades');
+export const getMyAttendance = () => api.get('/academic/attendance');
+export const getTeacherClasses = () => api.get('/academic/classes');
+export const getTeacherAttendanceSummary = () => api.get('/academic/attendance/summary');
+export const getLibraryStats = () => api.get('/library/stats');
+export const getFinanceStats = () => api.get('/finance/summary');

@@ -48,17 +48,6 @@ export default function LoginPage() {
           <h1 className="font-display font-bold text-5xl leading-tight mb-6">
             Empowering<br/>Education<br/>Through<br/>Technology
           </h1>
-          <p className="text-white/70 text-lg leading-relaxed max-w-md">
-            Secure access for BrightFuture staff and families. Sessions use short-lived access tokens with rotating refresh tokens for safer sign-in.
-          </p>
-          <div className="grid grid-cols-3 gap-4 mt-10">
-            {[['JWT','Rotating'],['RBAC','Enforced'],['RFC7807','Errors']].map(([n,l]) => (
-              <div key={l} className="bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-                <div className="font-display font-bold text-2xl">{n}</div>
-                <div className="text-white/60 text-sm mt-1">{l}</div>
-              </div>
-            ))}
-          </div>
         </div>
         <p className="text-white/40 text-sm">© 2025 BrightFuture Primary School · Accra, Ghana</p>
       </div>
@@ -75,7 +64,6 @@ export default function LoginPage() {
             </div>
 
             <h2 className="font-display font-bold text-2xl text-gray-900 mb-1">Sign in</h2>
-            <p className="text-gray-500 text-sm mb-6">Access the BrightFuture backend workspace</p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>

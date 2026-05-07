@@ -7,6 +7,33 @@ import toast from 'react-hot-toast';
 import { Eye, EyeOff, GraduationCap, UserPlus } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
+const passwordRules = [
+  {
+    label: 'At least 12 characters',
+    test: (value) => value.length >= 12,
+  },
+  {
+    label: 'At least one lowercase letter',
+    test: (value) => /[a-z]/.test(value),
+  },
+  {
+    label: 'At least one uppercase letter',
+    test: (value) => /[A-Z]/.test(value),
+  },
+  {
+    label: 'At least one number',
+    test: (value) => /[0-9]/.test(value),
+  },
+  {
+    label: 'At least one special character',
+    test: (value) => /[^A-Za-z0-9]/.test(value),
+  },
+  {
+    label: 'No spaces at the beginning or end',
+    test: (value) => value.trim() === value,
+  },
+];
+
 const emptyForm = {
   name: '',
   email: '',
@@ -21,6 +48,8 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const { register, user, loading, getErrorMessage } = useAuth();
   const router = useRouter();
+  const unmetPasswordRules = passwordRules.filter((rule) => !rule.test(form.password));
+  const passwordIsValid = unmetPasswordRules.length === 0;
 
   useEffect(() => {
     if (!loading && user) {
@@ -33,6 +62,11 @@ export default function RegisterPage() {
 
     if (form.password !== form.confirmPassword) {
       toast.error('Passwords do not match.');
+      return;
+    }
+
+    if (!passwordIsValid) {
+      toast.error(unmetPasswordRules[0].label);
       return;
     }
 
@@ -68,9 +102,6 @@ export default function RegisterPage() {
           <h1 className="font-display font-bold text-5xl leading-tight mb-6">
             Create A<br />Secure Parent<br />Portal Account
           </h1>
-          <p className="text-white/70 text-lg leading-relaxed max-w-md">
-            Registration signs you straight into the system and issues a protected refresh cookie for future sessions.
-          </p>
         </div>
 
         <p className="text-white/40 text-sm">Use a strong password with uppercase, lowercase, numbers, and symbols.</p>
@@ -87,7 +118,6 @@ export default function RegisterPage() {
             </div>
 
             <h2 className="font-display font-bold text-2xl text-gray-900 mb-1">Create account</h2>
-            <p className="text-gray-500 text-sm mb-6">Parent registration is enabled on the backend</p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
@@ -156,7 +186,7 @@ export default function RegisterPage() {
 
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || !passwordIsValid}
                 className="w-full py-3 rounded-xl font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-95 disabled:opacity-60"
                 style={{ background: 'linear-gradient(135deg, #0f766e, #2563eb)' }}
               >
@@ -169,14 +199,20 @@ export default function RegisterPage() {
                 <UserPlus size={16} />
                 Password policy
               </div>
-              <p className="text-xs text-slate-500 mt-2">
-                The backend enforces 12+ characters with upper, lower, number, and symbol requirements.
-              </p>
-            </div>
+                  <div className="text-xs text-slate-500 mt-2">
+                    {passwordRules.map((rule) => {
+                      const isMet = rule.test(form.password);
 
-            <p className="text-sm text-gray-500 mt-6 text-center">
-              Already have an account?{' '}
-              <Link href="/login" className="font-semibold text-blue-600 hover:text-blue-700">
+                      return (
+                        <span
+                          key={rule.label}
+                          className={`block ${isMet ? 'text-emerald-700' : 'text-slate-500'}`}
+                        >
+                          {isMet ? 'OK' : '-'} {rule.label}
+                        </span>
+                      );
+                    })}
+                  </div>
                 Sign in
               </Link>
             </p>
