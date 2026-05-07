@@ -44,15 +44,15 @@ export function setUnauthorizedHandler(handler) {
 export function extractApiError(error, fallbackMessage = 'Request failed') {
   const data = error?.response?.data;
 
-  if (data?.detail) {
-    return data.detail;
-  }
-
   if (data?.errors && typeof data.errors === 'object') {
     const fieldMessages = Object.values(data.errors).flat().filter(Boolean);
     if (fieldMessages.length) {
       return fieldMessages[0];
     }
+  }
+
+  if (data?.detail) {
+    return data.detail;
   }
 
   if (data?.title) {

@@ -128,9 +128,6 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display font-bold text-2xl text-gray-900">Workspace Dashboard</h1>
-        <p className="text-gray-500 text-sm mt-0.5">
-          The frontend is aligned with the hardened backend: auth, health, users, and audit tooling.
-        </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -169,7 +166,7 @@ export default function DashboardPage() {
         <HealthCard title="Redis" check={health?.checks?.redis} icon={Server} />
       </div>
 
-      {user?.role === 'admin' ? (
+      {user?.role === 'admin' && (
         <div className="grid xl:grid-cols-5 gap-6">
           <div className="xl:col-span-2 card">
             <div className="flex items-center justify-between">
@@ -229,15 +226,6 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
-        </div>
-      ) : (
-        <div className="card">
-          <h2 className="font-semibold text-gray-900">What is available right now</h2>
-          <p className="text-sm text-gray-500 mt-2 max-w-2xl">
-            This frontend is now aligned with the production auth backend. Non-admin users can sign in,
-            maintain sessions with refresh rotation, and rely on backend health monitoring. Admin-only user
-            management is available in the Users & Audit area.
-          </p>
         </div>
       )}
     </div>

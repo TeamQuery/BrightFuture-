@@ -1,17 +1,51 @@
 import { z } from 'zod';
+import { env } from '../config/env.js';
 
-export const strongPasswordSchema = z
-  .string()
-  .min(12, 'Password must be at least 12 characters long.')
-  .max(128, 'Password must be 128 characters or fewer.')
-  .regex(/[a-z]/, 'Password must include at least one lowercase letter.')
-  .regex(/[A-Z]/, 'Password must include at least one uppercase letter.')
-  .regex(/[0-9]/, 'Password must include at least one number.')
-  .regex(/[^A-Za-z0-9]/, 'Password must include at least one special character.')
-  .refine(
-    (value) => value.trim() === value,
-    'Password must not start or end with whitespace.',
-  );
+function isConfiguredDemoPassword(value) {
+  const demoPassword = env.ACCOUNTS_PASSWORD ?? env.DEMO_ACCOUNT_PASSWORD;
+  return env.NODE_ENV !== 'production' && demoPassword === value;
+}
+
+function addPasswordIssue(context, message) {
+  context.addIssue({
+    code: z.ZodIssueCode.custom,
+    message,
+  });
+}
+
+export const strongPasswordSchema = z.string().superRefine((value, context) => {
+  if (isConfiguredDemoPassword(value)) {
+    return;
+  }
+
+  if (value.length < 12) {
+    addPasswordIssue(context, 'Password must be at least 12 characters long.');
+  }
+
+  if (value.length > 128) {
+    addPasswordIssue(context, 'Password must be 128 characters or fewer.');
+  }
+
+  if (!/[a-z]/.test(value)) {
+    addPasswordIssue(context, 'Password must include at least one lowercase letter.');
+  }
+
+  if (!/[A-Z]/.test(value)) {
+    addPasswordIssue(context, 'Password must include at least one uppercase letter.');
+  }
+
+  if (!/[0-9]/.test(value)) {
+    addPasswordIssue(context, 'Password must include at least one number.');
+  }
+
+  if (!/[^A-Za-z0-9]/.test(value)) {
+    addPasswordIssue(context, 'Password must include at least one special character.');
+  }
+
+  if (value.trim() !== value) {
+    addPasswordIssue(context, 'Password must not start or end with whitespace.');
+  }
+});
 
 export const registerSchema = z.object({
   name: z.string().trim().min(2).max(120),
