@@ -137,6 +137,7 @@ async function migrate() {
         specialization VARCHAR(100),
         hire_date DATE NOT NULL DEFAULT CURRENT_DATE,
         salary DECIMAL(10,2),
+        profile_photo_url TEXT,
         is_active BOOLEAN NOT NULL DEFAULT true,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -181,6 +182,7 @@ async function migrate() {
         class_id UUID REFERENCES classes(id) ON DELETE SET NULL,
         blood_group VARCHAR(10) CHECK (blood_group IN ('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-')),
         medical_info TEXT,
+        profile_photo_url TEXT,
         emergency_contact VARCHAR(200),
         is_active BOOLEAN DEFAULT true,
         status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'graduated', 'transferred')),

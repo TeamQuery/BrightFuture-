@@ -24,6 +24,7 @@ const sourceEnv = {
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(5000),
+  PORT_FALLBACKS: z.string().optional(),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
   DATABASE_POOL_MAX: z.coerce.number().int().min(1).max(50).default(20),
   DATABASE_POOL_MIN: z.coerce.number().int().min(0).max(20).default(2),
@@ -79,6 +80,10 @@ export const env = {
   ...parsed.data,
   COOKIE_SECURE: parsed.data.COOKIE_SECURE === 'true',
   TRUST_PROXY: parsed.data.TRUST_PROXY === 'true',
+  PORT_FALLBACKS: (parsed.data.PORT_FALLBACKS || '')
+    .split(',')
+    .map((port) => Number(port.trim()))
+    .filter((port) => Number.isInteger(port) && port > 0 && port <= 65535),
   CORS_ORIGINS: parsed.data.CORS_ORIGIN_WHITELIST.split(',')
     .map((origin) => origin.trim())
     .filter(Boolean),

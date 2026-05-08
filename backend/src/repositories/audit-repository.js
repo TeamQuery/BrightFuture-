@@ -64,7 +64,48 @@ export async function insertAuditLog(entry, client = pool) {
   return mapAuditRow(result.rows[0]);
 }
 
-export async function listAuditLogs(limit = 100, client = pool) {
+export async function listAuditLogs({ limit = 100, page = 1 } = {}, client = pool) {
+  const safeLimit = Math.max(1, Number(limit) || 100);
+  const safePage = Math.max(1, Number(page) || 1);
+  const offset = (safePage - 1) * safeLimit;
+
+  const result = await client.query(
+    `
+      SELECT
+        id,
+        request_id AS "requestId",
+        actor_user_id AS "actorUserId",
+        target_user_id AS "targetUserId",
+        action,
+        resource_type AS "resourceType",
+        resource_id AS "resourceId",
+        status,
+        ip_address::text AS "ipAddress",
+        user_agent AS "userAgent",
+        metadata,
+        created_at AS "createdAt"
+      FROM audit_logs
+      ORDER BY created_at DESC
+      LIMIT $1 OFFSET $2
+    `,
+    [safeLimit, offset],
+  );
+  const countResult = await client.query('SELECT COUNT(*)::int AS total FROM audit_logs');
+
+  const total = countResult.rows[0]?.total || 0;
+
+  return {
+    auditLogs: result.rows.map(mapAuditRow),
+    pagination: {
+      page: safePage,
+      limit: safeLimit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
+}
+
+export async function listRecentAuditLogs(limit = 100, client = pool) {
   const result = await client.query(
     `
       SELECT

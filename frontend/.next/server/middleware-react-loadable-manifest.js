@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{}"
+self.__REACT_LOADABLE_MANIFEST="{\"app\\\\teachers\\\\page.jsx -> ./TeacherDetailModal\":{\"id\":\"app\\\\teachers\\\\page.jsx -> ./TeacherDetailModal\",\"files\":[\"static/chunks/_app-pages-browser_src_app_teachers_TeacherDetailModal_jsx.js\"]}}"

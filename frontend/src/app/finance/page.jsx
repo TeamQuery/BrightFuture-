@@ -6,11 +6,13 @@ import { format, parseISO } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
 import { formatCurrency } from '@/lib/formatters';
+import { useAuth } from '@/lib/auth-context';
 
 const payMethods = ['cash','bank_transfer','mobile_money','card'];
 const emptyForm = { student_id:'', category_id:'', amount_paid:'', payment_method:'cash', reference_number:'', academic_year:'2024/2025', term:'Term 2', status:'paid', notes:'' };
 
 export default function FinancePage() {
+  const { user } = useAuth();
   const [payments, setPayments] = useState([]);
   const [categories, setCategories] = useState([]);
   const [students, setStudents] = useState([]);
@@ -20,6 +22,7 @@ export default function FinancePage() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [statusFilter, setStatusFilter] = useState('');
+  const canRecordPayment = ['admin', 'accountant'].includes(user?.role);
 
   const load = () => {
     setLoading(true);
@@ -48,7 +51,7 @@ export default function FinancePage() {
     amount: parseFloat(c.amount),
   }));
 
-  const statusBadge = { paid:'badge-paid', pending:'badge-pending', partial:'bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-medium', waived:'bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs font-medium' };
+  const statusBadge = { paid:'badge-paid', pending:'badge-pending', partial:'bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-medium', partially_paid:'bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs font-medium', waived:'bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs font-medium' };
 
   return (
     <div className="space-y-6">
@@ -57,7 +60,9 @@ export default function FinancePage() {
           <h1 className="font-display font-bold text-2xl text-gray-900">Finance</h1>
           <p className="text-sm text-gray-500 mt-0.5">Fee management & payment records</p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn-primary"><Plus size={16} /> Record Payment</button>
+        {canRecordPayment && (
+          <button onClick={() => setShowModal(true)} className="btn-primary"><Plus size={16} /> Record Payment</button>
+        )}
       </div>
 
       {/* Summary cards */}

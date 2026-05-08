@@ -47,8 +47,8 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
   }),
 );
-app.use(express.json({ limit: '16kb' }));
-app.use(express.urlencoded({ extended: false, limit: '16kb' }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ extended: false, limit: '2mb' }));
 app.use(cookieParser());
 app.use(ipRateLimiter);
 
@@ -68,6 +68,8 @@ app.use('/api/students', studentsRoutes);
 app.use('/api/v1/students', studentsRoutes);
 app.use('/api/teachers', teachersRoutes);
 app.use('/api/v1/teachers', teachersRoutes);
+app.use('/api/staff', teachersRoutes);
+app.use('/api/v1/staff', teachersRoutes);
 app.use('/api/functions', functionRoutes);
 app.use('/api/v1/functions', functionRoutes);
 app.use('/api/users', userRoutes);

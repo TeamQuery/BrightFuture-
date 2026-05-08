@@ -29,8 +29,12 @@ router.get(
   '/audit-logs',
   validate({ query: paginationQuerySchema }),
   asyncHandler(async (req, res) => {
-    const auditLogs = await listAuditLogs(req.query.limit);
-    res.json({ auditLogs });
+    const { auditLogs, pagination } = await listAuditLogs({
+      limit: req.query.limit,
+      page: req.query.page,
+    });
+
+    res.json({ auditLogs, pagination });
   }),
 );
 

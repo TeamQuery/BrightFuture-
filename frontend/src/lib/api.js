@@ -194,6 +194,7 @@ export const createEvent = (data) => api.post('/events', data);
 export const deleteEvent = (id) => api.delete(`/events/${id}`);
 export const getStudents = (params) => api.get('/students', { params });
 export const getStudent = (id) => api.get(`/students/${id}`);
+export const updateStudentPhoto = (id, profile_photo_url) => api.patch(`/students/${id}/photo`, { profile_photo_url });
 export const createStudent = (data) => api.post('/students', data);
 export const updateStudent = (id, data) => api.put(`/students/${id}`, data);
 export const deleteStudent = (id) => api.delete(`/students/${id}`);
@@ -202,6 +203,7 @@ export const getStudentAttendance = (id) => api.get(`/students/${id}/attendance`
 export const getStudentFees = (id) => api.get(`/students/${id}/fees`);
 export const getStaff = (params) => api.get('/staff', { params });
 export const getStaffMember = (id) => api.get(`/staff/${id}`);
+export const updateStaffPhoto = (id, profile_photo_url) => api.patch(`/staff/${id}/photo`, { profile_photo_url });
 export const createStaff = (data) => api.post('/staff', data);
 export const updateStaff = (id, data) => api.put(`/staff/${id}`, data);
 export const getClasses = () => api.get('/academic/classes');

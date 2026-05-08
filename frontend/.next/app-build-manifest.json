@@ -1,5 +1,16 @@
 {
   "pages": {
+    "/login/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/login/page.js"
+    ],
+    "/layout": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/css/app/layout.css",
+      "static/chunks/app/layout.js"
+    ],
     "/dashboard/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -10,16 +21,25 @@
       "static/chunks/main-app.js",
       "static/chunks/app/dashboard/layout.js"
     ],
-    "/layout": [
+    "/users/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/css/app/layout.css",
-      "static/chunks/app/layout.js"
+      "static/chunks/app/users/page.js"
     ],
-    "/login/page": [
+    "/users/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/login/page.js"
+      "static/chunks/app/users/layout.js"
+    ],
+    "/teachers/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/teachers/page.js"
+    ],
+    "/teachers/layout": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/teachers/layout.js"
     ],
     "/students/page": [
       "static/chunks/webpack.js",
@@ -81,26 +101,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/library/layout.js"
     ],
-    "/events/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/events/page.js"
-    ],
-    "/events/layout": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/events/layout.js"
-    ],
-    "/teachers/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/teachers/page.js"
-    ],
-    "/teachers/layout": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/teachers/layout.js"
-    ],
     "/finance/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -111,15 +111,15 @@
       "static/chunks/main-app.js",
       "static/chunks/app/finance/layout.js"
     ],
-    "/page": [
+    "/events/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/page.js"
+      "static/chunks/app/events/page.js"
     ],
-    "/_not-found/page": [
+    "/events/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/_not-found/page.js"
+      "static/chunks/app/events/layout.js"
     ]
   }
 }
